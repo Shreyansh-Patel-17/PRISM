@@ -1,11 +1,7 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-
-// Temporary mock users (replace with MongoDB later)
-const users = [
-	{ id: "1", name: "Shreyansh", email: "shreyansh@demo.com", password: "123456" },
-	{ id: "2", name: "Aditi", email: "aditi@demo.com", password: "password" },
-];
+import { users } from "@/lib/users";
+import bcrypt from "bcrypt";
 
 const handler = NextAuth({
 	providers: [
@@ -16,11 +12,28 @@ const handler = NextAuth({
 				password: { label: "Password", type: "password" },
 			},
 			async authorize(credentials) {
-				const user = users.find(
-					(u) => u.email === credentials?.email && u.password === credentials?.password
-				);
-				if (user) return user;
-				throw new Error("Invalid email or password");
+				if (!credentials?.email || !credentials?.password) {
+					throw new Error("Email and password are required");
+				}
+
+				const user = users.find((u) => u.email === credentials.email);
+				if (!user) {
+					throw new Error("Invalid email or password");
+				}
+
+				let isValidPassword = false;
+				if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$')) {
+					// Hashed password
+					isValidPassword = await bcrypt.compare(credentials.password, user.password);
+				} else {
+					// Plain text password (for demo users)
+					isValidPassword = credentials.password === user.password;
+				}
+				if (!isValidPassword) {
+					throw new Error("Invalid email or password");
+				}
+
+				return { id: user.id, name: user.name, email: user.email };
 			},
 		}),
 	],
