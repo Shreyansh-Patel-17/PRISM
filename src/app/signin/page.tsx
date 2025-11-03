@@ -10,18 +10,29 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const res = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-    });
-    if (res?.error) {
-      setError("Invalid credentials");
-    } else {
-      router.push("/dashboard");
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const res = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+      });
+
+      if (res?.error) {
+        setError("Invalid email or password. Please try again.");
+      } else {
+        router.push("/dashboard");
+      }
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -48,26 +59,36 @@ export default function SignInPage() {
             <input
               type="email"
               placeholder="Email"
-              className="w-full p-3 rounded-lg bg-pink-50 /* dark:bg-gray-800 */ border border-pink-200 /* dark:border-rose-900 */ placeholder-gray-400 text-gray-800 /* dark:text-pink-100 */ focus:outline-none focus:ring-2 focus:ring-pink-300"
+              className="w-full p-3 rounded-lg bg-pink-50 /* dark:bg-gray-800 */ border border-pink-200 /* dark:border-rose-900 */ placeholder-gray-400 text-gray-800 /* dark:text-pink-100 */ focus:outline-none focus:ring-2 focus:ring-pink-300 disabled:opacity-50"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={isLoading}
             />
 
             <input
               type="password"
               placeholder="Password"
-              className="w-full p-3 rounded-lg bg-pink-50 /* dark:bg-gray-800 */ border border-pink-200 /* dark:border-rose-900 */ placeholder-gray-400 text-gray-800 /* dark:text-pink-100 */ focus:outline-none focus:ring-2 focus:ring-pink-300"
+              className="w-full p-3 rounded-lg bg-pink-50 /* dark:bg-gray-800 */ border border-pink-200 /* dark:border-rose-900 */ placeholder-gray-400 text-gray-800 /* dark:text-pink-100 */ focus:outline-none focus:ring-2 focus:ring-pink-300 disabled:opacity-50"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={isLoading}
             />
 
             <button
               type="submit"
-              className="w-full py-3 rounded-lg bg-gradient-to-r from-pink-500 to-rose-400 text-white font-semibold hover:opacity-90 transition-all shadow-lg"
+              disabled={isLoading}
+              className="w-full py-3 rounded-lg bg-gradient-to-r from-pink-500 to-rose-400 text-white font-semibold hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              Sign In
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Signing In...
+                </>
+              ) : (
+                "Sign In"
+              )}
             </button>
           </form>
 

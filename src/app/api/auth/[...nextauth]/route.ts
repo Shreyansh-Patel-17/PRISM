@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { users } from "@/lib/users";
+import connectToDatabase from "@/lib/mongodb";
+import User from "@/models/User";
 import bcrypt from "bcrypt";
 
 const handler = NextAuth({
@@ -16,24 +17,22 @@ const handler = NextAuth({
 					throw new Error("Email and password are required");
 				}
 
-				const user = users.find((u) => u.email === credentials.email);
+				// Connect to database
+				await connectToDatabase();
+
+				// Find user by email
+				const user = await User.findOne({ email: credentials.email });
 				if (!user) {
 					throw new Error("Invalid email or password");
 				}
 
-				let isValidPassword = false;
-				if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$')) {
-					// Hashed password
-					isValidPassword = await bcrypt.compare(credentials.password, user.password);
-				} else {
-					// Plain text password (for demo users)
-					isValidPassword = credentials.password === user.password;
-				}
+				// Check password
+				const isValidPassword = await bcrypt.compare(credentials.password, user.password);
 				if (!isValidPassword) {
 					throw new Error("Invalid email or password");
 				}
 
-				return { id: user.id, name: user.name, email: user.email };
+				return { id: user._id.toString(), name: user.name, email: user.email };
 			},
 		}),
 	],
