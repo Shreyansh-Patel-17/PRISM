@@ -19,8 +19,8 @@ const UserSchema = new mongoose.Schema({
     required: true,
   },
   skill: {
-    type: String,
-    default: '',
+    type: [String],
+    default: [],
   },
   resume: {
     type: String,

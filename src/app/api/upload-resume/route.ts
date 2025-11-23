@@ -35,6 +35,9 @@ export async function POST(request: NextRequest) {
     user.resume = resume.name;
     await user.save();
 
+    // TODO: Send resume to resume parser (to be implemented by teammate)
+    // The resume parser will extract skills and call the resume-parser API to update skills
+
     return NextResponse.json({ message: "Resume uploaded successfully" }, { status: 200 });
   } catch (error) {
     console.error("Error uploading resume:", error);

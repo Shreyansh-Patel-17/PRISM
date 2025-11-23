@@ -45,8 +45,8 @@ export default function InterviewPage() {
       alert("Please upload your resume first.");
       return;
     }
-    // Navigate to actual interview or next step
-    router.push("/interview/start");
+    // Navigate to actual interview page
+    router.push("/interview/live");
   };
 
   return (
