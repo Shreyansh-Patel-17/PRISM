@@ -17,11 +17,11 @@ We’re using a **feature-branch workflow** to ensure smooth collaboration.
 2. **Feature Branch = Your Workspace**
     - Each developer creates their own branch for their assigned feature.
     - Example:
-        - `feature/frontend-auth`
-        - `feature/resume-parser`
-        - `feature/question-generator`
-        - `feature/stt`
-        - `feature/evaluator`
+        - `frontend-auth`
+        - `resume-parser`
+        - `question-generator`
+        - `stt`
+        - `evaluator`
 
 ---
 
@@ -30,8 +30,7 @@ We’re using a **feature-branch workflow** to ensure smooth collaboration.
 ### 1️⃣ Clone the Repository
 
 ```bash
-git clone https://github.com/<your-org>/AI-Interview-Assistant.git
-cd AI-Interview-Assistant
+git clone https://github.com/<your-org>/PRISM.git
 ```
 
 ### 2️⃣ Install Dependencies
@@ -43,13 +42,13 @@ npm install
 ### 3️⃣ Create Your Branch
 
 ```bash
-git checkout -b feature/<your-feature>
+git checkout -b <your-feature>
 ```
 
 For example:
 
 ```bash
-git checkout -b feature/question-generator
+git checkout -b question-generator
 ```
 
 ---
@@ -73,7 +72,7 @@ git checkout -b feature/question-generator
 4. Push your branch:
 
     ```bash
-    git push origin feature/<your-feature>
+    git push origin <your-feature>
     ```
 
 ---
@@ -88,7 +87,7 @@ git checkout main
 git pull origin main
 
 # Go back to your branch
-git checkout feature/<your-feature>
+git checkout <your-feature>
 
 # Merge main into your branch
 git merge main
@@ -105,7 +104,7 @@ When your feature is complete:
 1. Push your branch:
 
     ```bash
-    git push origin feature/<your-feature>
+    git push origin <your-feature>
     ```
 
 2. Go to **GitHub → Pull Requests → New Pull Request**
@@ -144,7 +143,7 @@ Each teammate integrates their part via **Next.js API routes**.
 
 | Type           | Convention           | Example                        |
 |----------------|---------------------|--------------------------------|
-| Branch name    | `feature/<feature>` | `feature/resume-parser`        |
+| Branch name    | `<feature>` | `resume-parser`        |
 | Commit message | short & meaningful  | `Added Resume upload API`      |
 | Folder names   | lowercase           | `/components`, `/models`       |
 | File names     | lowercase/camelCase | `resumeUpload.tsx`             |
@@ -167,10 +166,10 @@ Each teammate integrates their part via **Next.js API routes**.
 
 ```bash
 # 1. Clone
-git clone https://github.com/<your-org>/AI-Interview-Assistant.git
+git clone https://github.com/<your-org>/PRISM.git
 
 # 2. Create branch
-git checkout -b feature/stt
+git checkout -b stt
 
 # 3. Work locally
 npm run dev
@@ -182,9 +181,9 @@ git commit -m "Integrated speech-to-text model API"
 # 5. Sync with main
 git checkout main
 git pull origin main
-git checkout feature/stt
+git checkout stt
 git merge main
 
 # 6. Push and create PR
-git push origin feature/stt
+git push origin stt
 ```

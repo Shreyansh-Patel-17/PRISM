@@ -26,6 +26,16 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  generatedQuestions: {
+    type: Map,
+    of: [String],
+    default: {},
+  },
+  skillScores: {
+    type: Map,
+    of: Number,
+    default: {},
+  },
 }, {
   timestamps: true,
 });
