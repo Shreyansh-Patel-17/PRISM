@@ -1,0 +1,24 @@
+[Cybersecurity] Describe the steps you would take to investigate a suspected security incident, from initial detection to resolution.
+   ➝ Expected Keywords: Incident Response Life Cycle, Containment, Eradication, Recovery, Post-incident Analysis
+
+[Cybersecurity] Explain the difference between symmetric and asymmetric encryption, and provide a scenario where each would be preferred.
+   ➝ Expected Keywords: Public Key, Private Key, Key Exchange, Speed, Scalability, Confidentiality
+
+[Cybersecurity] What is the CIA Triad in cybersecurity, and why is each component crucial for an organization's security posture?
+   ➝ Expected Keywords: Confidentiality, Integrity, Availability, Data Protection, Risk Management
+
+[Deep Learning] Error: Unable to generate question for Deep Learning.
+   ➝ Expected Keywords: 
+
+[Deep Learning] Error: Unable to generate question for Deep Learning.
+   ➝ Expected Keywords: 
+
+[Deep Learning] Explain the backpropagation algorithm and its role in training neural networks.
+   ➝ Expected Keywords: gradient descent, chain rule, loss function, weights/biases, error propagation
+
+[Deep Learning] Describe the key architectural components of a Convolutional Neural Network (CNN) and explain why they are effective for image processing tasks.
+   ➝ Expected Keywords: convolutional layers, pooling layers, feature extraction, receptive fields, translation invariance
+
+[Deep Learning] What is overfitting in the context of deep learning, and what common techniques can be employed to mitigate it?
+   ➝ Expected Keywords: generalization, validation set, dropout, L1/L2 regularization, early stopping
+

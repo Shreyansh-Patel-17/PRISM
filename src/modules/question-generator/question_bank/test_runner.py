@@ -21,12 +21,26 @@
 # for i, q in enumerate(questions, 1):
 #     print(f"{i}. [{q['skill']}] {q['text']}")
 
+# from question_mapper import get_questions_for_skills
+
+# skills = ["Cybersecurity"]
+
+# questions = get_questions_for_skills(skills)
+
+# for i, q in enumerate(questions, 1):
+#     print(f"{i}. [{q['skill']}] {q['text']}")
+#     print(f"   ➝ Expected Keywords: {', '.join(q['keywords'])}\n")
+
+
+from file_utils import save_questions_to_file
 from question_mapper import get_questions_for_skills
 
-skills = ["Cybersecurity"]
-
+skills = ["Deep Learning"]
 questions = get_questions_for_skills(skills)
 
 for i, q in enumerate(questions, 1):
     print(f"{i}. [{q['skill']}] {q['text']}")
     print(f"   ➝ Expected Keywords: {', '.join(q['keywords'])}\n")
+
+save_questions_to_file(questions)
+
