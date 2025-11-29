@@ -66,11 +66,20 @@
 
 
 
+import os
+from dotenv import load_dotenv
 import google.generativeai as genai
 import re
 
-# Configure Gemini API
-genai.configure(api_key="AIzaSyDrf94oYvNvkADcgCj-QLOKIGTNJu14frg")  # <-- replace with your API key
+# Load variables from .env file
+load_dotenv()
+
+# Get the key securely
+api_key = os.getenv("GEMINI_API_KEY")
+
+# Configure Gemini with the hidden key
+genai.configure(api_key=api_key)
+
 
 MODEL_PRIORITY = ["models/gemini-2.5-flash"]
 

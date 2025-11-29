@@ -13,12 +13,34 @@
 # except Exception as e:
 #     print("API ERROR:", e)
 
+# OLD VERSION
+# import google.generativeai as genai
 
+# genai.configure(api_key="AIzaSyDrf94oYvNvkADcgCj-QLOKIGTNJu14frg")
+
+# models = genai.list_models()
+
+# for m in models:
+#     print(m.name)
+
+
+
+
+import os
+from dotenv import load_dotenv
 import google.generativeai as genai
 
-genai.configure(api_key="AIzaSyDrf94oYvNvkADcgCj-QLOKIGTNJu14frg")
+# Load variables from .env file
+load_dotenv()
 
+# Get the key securely
+api_key = os.getenv("GEMINI_API_KEY")
+
+# Configure Gemini with the hidden key
+genai.configure(api_key=api_key)
+
+# Test: list models
 models = genai.list_models()
-
 for m in models:
     print(m.name)
+
