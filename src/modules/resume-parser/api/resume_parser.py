@@ -1,10 +1,7 @@
-
-
-# 📄 Import libraries
 from PyPDF2 import PdfReader
-from google.colab import files
-import re
 import spacy
+import re
+import json
 
 # 📤 Upload resume PDF
 uploaded = files.upload()
@@ -15,71 +12,61 @@ def extract_text_from_pdf(file_path):
     reader = PdfReader(file_path)
     text = ""
     for page in reader.pages:
-        text += page.extract_text()
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
     return text
 
 resume_text = extract_text_from_pdf(resume_file)
-print("✅ Resume Text Extracted\n")
-print(resume_text[:500])  # Preview
+
 # 🧠 Load NLP model
 nlp = spacy.load("en_core_web_sm")
 
-# 🎓 Extract Education Section
-def extract_education(text):
-    edu_keywords = ["Education", "Bachelor", "School", "University", "CGPA", "Percentage"]
-    lines = text.split('\n')
-    edu_section = [line for line in lines if any(kw in line for kw in edu_keywords)]
-    return edu_section
+# 📚 Skill dictionaries
+technical_skills = [
+    "Python", "Java", "C++", "C", "R", "SQL", "MySQL", "TensorFlow", "PyTorch",
+    "Machine Learning", "Deep Learning", "Artificial Intelligence", "NLP",
+    "Data Science", "Data Analysis", "Data Visualization", "Cloud Computing",
+    "AWS", "Azure", "Git", "Node.js", "React", "HTML", "CSS", "JavaScript",
+    "DBMS", "OOP", "Data Structures", "Algorithms", "Computer Networks"
+]
 
-education_info = extract_education(resume_text)
-print("\n🎓 Education Info:")
-for line in education_info:
-    print("-", line)
+soft_skills = [
+    "Communication", "Leadership", "Teamwork", "Time Management",
+    "Public Speaking", "Problem Solving", "Adaptability", "Collaboration"
+]
 
-# 💼 Extract Experience Section
-def extract_experience(text):
-    exp_keywords = ["Experience", "Intern", "Work", "Company", "Position", "Role", "Team", "Research", "Development"]
-    lines = text.split('\n')
-    exp_section = [line for line in lines if any(kw in line for kw in exp_keywords)]
-    return exp_section
+other_skills = [
+    "Cybersecurity", "Project Management", "MIS", "Institutional Automation",
+    "Event Coordination", "Technical Writing", "Teaching", "Presentation",
+    "Organizational Skills", "Research", "Documentation"
+]
 
-experience_info = extract_experience(resume_text)
-print("\n💼 Experience Info:")
-for line in experience_info:
-    print("-", line)
+# 🛠 Skill extractor
+def extract_categorized_skills(text):
+    doc = nlp(text)
+    found = {
+        "Technical Skills": set(),
+        "Soft Skills": set(),
+        "Other Skills": set()
+    }
 
-# 🧪 Extract Projects Section
-def extract_projects(text):
-    proj_keywords = ["Project", "Developed", "Built", "Created", "Implemented", "Designed", "Engineered"]
-    lines = text.split('\n')
-    proj_section = [line for line in lines if any(kw in line for kw in proj_keywords)]
-    return proj_section
+    for token in doc:
+        word = token.text.lower()
+        for skill in technical_skills:
+            if skill.lower() == word or skill.lower() in word:
+                found["Technical Skills"].add(skill)
+        for skill in soft_skills:
+            if skill.lower() == word or skill.lower() in word:
+                found["Soft Skills"].add(skill)
+        for skill in other_skills:
+            if skill.lower() == word or skill.lower() in word:
+                found["Other Skills"].add(skill)
 
-project_info = extract_projects(resume_text)
-print("\n🧪 Project Info:")
-for line in project_info:
-    print("-", line)
+    return {k: sorted(list(v)) for k, v in found.items()}
 
-# 🧠 Score Projects Based on Complexity
-def score_project(projects):
-    score = 0
-    for proj in projects:
-        if any(kw in proj.lower() for kw in ["deep learning", "machine learning", "AI", "NLP", "analytics", "streamlit", "deployment", "automation"]):
-            score += 10
-        elif any(kw in proj.lower() for kw in ["website", "calculator", "basic", "static", "simple", "mini"]):
-            score += 3
-        else:
-            score += 5
-    return score
+# 📊 Extracted Skills
+categorized_skills = extract_categorized_skills(resume_text)
 
-# 🧠 Score Experience Based on Depth
-def score_experience(experiences):
-    score = 0
-    for exp in experiences:
-        if any(kw in exp.lower() for kw in ["research", "intern", "industry", "development", "team", "collaboration", "lead"]):
-            score += 8
-        elif any(kw in exp.lower() for kw in ["minor", "short", "basic", "training", "intro"]):
-            score += 3
-        else:
-            score += 5
-    return score
+print("✅ Categorized Skills Extracted:\n")
+print(json.dumps(categorized_skills, indent=4))
