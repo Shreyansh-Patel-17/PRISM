@@ -1,22 +1,29 @@
+import sys
 from PyPDF2 import PdfReader
 import spacy
 import re
 import json
 
-# 📤 Upload resume PDF
-uploaded = files.upload()
-resume_file = list(uploaded.keys())[0]
-
 # 📄 Extract text from PDF
 def extract_text_from_pdf(file_path):
-    reader = PdfReader(file_path)
-    text = ""
-    for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text + "\n"
-    return text
+    try:
+        reader = PdfReader(file_path)
+        text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+        return text
+    except Exception as e:
+        print(json.dumps({"error": f"Failed to extract text from PDF: {str(e)}"}))
+        sys.exit(1)
 
+# Get file path from command line argument
+if len(sys.argv) < 2:
+    print(json.dumps({"error": "No file path provided"}))
+    sys.exit(1)
+
+resume_file = sys.argv[1]
 resume_text = extract_text_from_pdf(resume_file)
 
 # 🧠 Load NLP model
@@ -68,5 +75,4 @@ def extract_categorized_skills(text):
 # 📊 Extracted Skills
 categorized_skills = extract_categorized_skills(resume_text)
 
-print("✅ Categorized Skills Extracted:\n")
-print(json.dumps(categorized_skills, indent=4))
+print(json.dumps(categorized_skills))
