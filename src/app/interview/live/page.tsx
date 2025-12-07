@@ -71,25 +71,21 @@ export default function LiveInterviewStyled() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // fetch questions from API (adjust endpoint if needed)
+  // fetch questions from API (now from stored questions in database)
   async function fetchQuestions() {
     try {
-      const res = await fetch("/api/generate-questions", {
-        method: "POST",
+      const res = await fetch("/api/get-questions", {
+        method: "GET",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ /* optionally send userId or resumeId */ }),
       });
       if (!res.ok) {
         console.warn("Failed to fetch questions");
         return;
       }
       const data = await res.json();
-      // assume data is an array of { questionId?, text }
+      // data is an array of { questionId?, text, skill?, keywords? }
       if (Array.isArray(data)) {
         setQuestions(data);
-        setCurrentQuestionIdx(0);
-      } else if (Array.isArray((data as any).questions)) {
-        setQuestions((data as any).questions);
         setCurrentQuestionIdx(0);
       } else {
         console.warn("Unexpected questions response shape", data);
