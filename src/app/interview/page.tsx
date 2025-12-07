@@ -6,8 +6,17 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function InterviewPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+
+  if (status === "loading") {
+    return <div>Loading...</div>;
+  }
+
+  if (!session) {
+    router.push("/signin");
+    return null;
+  }
   const [resume, setResume] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -19,7 +28,7 @@ export default function InterviewPage() {
     setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append("resume", resume);
+      formData.append("file", resume);
       formData.append("email", session?.user?.email || "");
 
       const res = await fetch("/api/upload-resume", {
@@ -30,7 +39,10 @@ export default function InterviewPage() {
       if (res.ok) {
         setUploadSuccess(true);
       } else {
-        alert("Upload failed. Please try again.");
+        const errorData = await res.json();
+        const errorMsg = errorData.error || "Please try again.";
+        const stderrMsg = errorData.stderr ? `\nDetails: ${errorData.stderr}` : "";
+        alert(`Upload failed: ${errorMsg}${stderrMsg}`);
       }
     } catch (error) {
       console.error("Upload error:", error);
