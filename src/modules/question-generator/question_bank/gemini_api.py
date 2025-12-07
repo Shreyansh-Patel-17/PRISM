@@ -71,8 +71,8 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import re
 
-# Load variables from .env file
-load_dotenv()
+# Load variables from .env.local in project root
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../../../.env.local'))
 
 # Get the key securely
 api_key = os.getenv("GEMINI_API_KEY")
@@ -81,7 +81,7 @@ api_key = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=api_key)
 
 
-MODEL_PRIORITY = ["models/gemini-2.5-flash"]
+MODEL_PRIORITY = ["models/gemini-2.5-flash", "models/gemini-2.0-flash", "models/gemini-pro"]
 
 def get_available_model():
     available = [m.name for m in genai.list_models()]

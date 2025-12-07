@@ -85,44 +85,37 @@ async function generateQuestions(skills: string[]): Promise<any[]> {
     const scriptPath = path.join(process.cwd(), 'src/modules/question-generator/question_bank/generate_for_skills.py');
     const cwd = path.dirname(scriptPath);
 
-    // Find a working python executable: env PYTHON, then 'py', 'python3', 'python'
-    const candidates = [process.env.PYTHON, 'py', 'python3', 'python'].filter(Boolean) as string[];
-    let pythonCmd: string | null = null;
-    for (const c of candidates) {
-      try {
-        const res = spawnSync(c, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
-        if (res && res.status === 0) {
-          pythonCmd = c;
-          break;
-        }
-      } catch {
-        // ignore and try next
+    // Use the specific Python executable where packages are installed
+    const pythonCmd = 'c:\\python64\\python.exe';
+    try {
+      const res = spawnSync(pythonCmd, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+      if (!res || res.status !== 0) {
+        reject(new Error('Python executable not found or not working.'));
+        return;
       }
-    }
-    if (!pythonCmd) {
-      // Provide clear error for missing python binary
-      reject(new Error('No Python executable found. Set PYTHON env or ensure py/python3/python is on PATH.'));
+    } catch {
+      reject(new Error('Python executable not found or not working.'));
       return;
     }
 
-    const pythonProcess = spawn(pythonCmd, [scriptPath], { cwd, env: process.env });
+    const pythonProcess = spawn(pythonCmd, [scriptPath], { cwd, env: { ...process.env, PYTHONPATH: 'c:\\python64\\Lib\\site-packages', PATH: 'c:\\python64;' + process.env.PATH } });
 
     let output = '';
     let errorOutput = '';
 
     // send skills via stdin (some scripts expect JSON from stdin)
     try {
-      pythonProcess.stdin.write(JSON.stringify(skills));
-      pythonProcess.stdin.end();
+      pythonProcess.stdin?.write(JSON.stringify(skills));
+      pythonProcess.stdin?.end();
     } catch (e) {
       // not critical; keep going
     }
 
-    pythonProcess.stdout.on('data', (data) => {
+    pythonProcess.stdout?.on('data', (data: Buffer) => {
       output += data.toString();
     });
 
-    pythonProcess.stderr.on('data', (data) => {
+    pythonProcess.stderr?.on('data', (data: Buffer) => {
       errorOutput += data.toString();
     });
 
@@ -132,7 +125,7 @@ async function generateQuestions(skills: string[]): Promise<any[]> {
       try { pythonProcess.kill(); } catch {}
     }, TIMEOUT_MS);
 
-    pythonProcess.on('close', (code) => {
+    pythonProcess.on('close', (code: number | null) => {
       clearTimeout(timeout);
 
       if (code !== 0) {
@@ -166,7 +159,7 @@ async function generateQuestions(skills: string[]): Promise<any[]> {
       }
     });
 
-    pythonProcess.on('error', (err) => {
+    pythonProcess.on('error', (err: Error) => {
       clearTimeout(timeout);
       reject(err);
     });

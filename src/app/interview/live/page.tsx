@@ -171,7 +171,7 @@ export default function LiveInterviewStyled() {
     return `${mm}:${ss}`;
   };
 
-  const prismAvatar = "/src/public/images/prism-avatar.jpg";
+  const prismAvatar = "/images/prism-avatar.jpg";
 
   // question navigation helpers
   const nextQuestion = () => {
