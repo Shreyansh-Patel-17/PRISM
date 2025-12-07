@@ -5,3 +5,6 @@ node_modules/
 .next/
 npm-debug.log
 .env.local
+__pycache__/
+TODO.md
+tmp/
