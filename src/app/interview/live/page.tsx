@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 type Question = {
   questionId?: string;
   text: string;
+  skill?: string;
 };
 
 export default function LiveInterviewStyled() {
@@ -24,6 +25,13 @@ export default function LiveInterviewStyled() {
   // QUESTIONS
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
+  const [waveformHeights, setWaveformHeights] = useState<number[]>(Array.from({ length: 16 }, () => 20));
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [hasGreeted, setHasGreeted] = useState(false);
+  const [hasFetchedQuestions, setHasFetchedQuestions] = useState(false);
 
   // start camera & mic
   const startMedia = async () => {
@@ -71,26 +79,23 @@ export default function LiveInterviewStyled() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // fetch questions from API (adjust endpoint if needed)
+  // fetch questions from API (now from stored questions in database)
   async function fetchQuestions() {
     try {
-      const res = await fetch("/api/generate-questions", {
-        method: "POST",
+      const res = await fetch("/api/get-questions", {
+        method: "GET",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ /* optionally send userId or resumeId */ }),
       });
       if (!res.ok) {
         console.warn("Failed to fetch questions");
         return;
       }
       const data = await res.json();
-      // assume data is an array of { questionId?, text }
+      // data is an array of { questionId?, text, skill?, keywords? }
       if (Array.isArray(data)) {
         setQuestions(data);
         setCurrentQuestionIdx(0);
-      } else if (Array.isArray((data as any).questions)) {
-        setQuestions((data as any).questions);
-        setCurrentQuestionIdx(0);
+        setHasFetchedQuestions(true); // Mark as fetched to trigger speech
       } else {
         console.warn("Unexpected questions response shape", data);
       }
@@ -181,6 +186,143 @@ export default function LiveInterviewStyled() {
     setCurrentQuestionIdx((i) => Math.max(i - 1, 0));
   };
 
+
+
+  // Animate waveform during speech
+  const animateWaveformDuringSpeech = () => {
+    let phase = 0;
+    let lastTime = 0;
+    const animate = (currentTime: number) => {
+      if (currentTime - lastTime >= 6) { // ~60fps
+        lastTime = currentTime;
+        phase += 0.1;
+        const newHeights = Array.from({ length: 16 }, (_, i) => {
+          const wave = Math.sin(phase + i * 0.5) * 24 + 25; // Sine wave between 1-49px
+          return Math.max(1, Math.min(50, wave));
+        });
+        setWaveformHeights(newHeights);
+      }
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+    animationFrameRef.current = requestAnimationFrame(animate);
+  };
+
+  // Speak greeting and question
+  const speakInterview = () => {
+    if (!('speechSynthesis' in window)) {
+      console.warn("Speech synthesis not supported");
+      return;
+    }
+
+    const username = session?.user?.name || "User";
+    const greeting = ` Hello ${username}, let's start the interview`; // Add leading space and fix "lets" to "let's"
+    const question = questions[currentQuestionIdx]?.text || "";
+    const questionWithSpace = " " + question; // Add leading space to prevent skipping start
+
+    console.log("Speaking interview:");
+    console.log("Questions loaded:", questions.length);
+    console.log("Current question index:", currentQuestionIdx);
+    console.log("Question text:", question);
+
+    if (!hasGreeted) {
+      // Speak greeting first
+      const greetingUtterance = new SpeechSynthesisUtterance(greeting);
+      greetingUtterance.rate = 0.9;
+      greetingUtterance.pitch = 1;
+
+      greetingUtterance.onstart = () => {
+        console.log("Greeting started");
+        animateWaveformDuringSpeech();
+      };
+
+      greetingUtterance.onend = () => {
+        console.log("Greeting ended");
+        setHasGreeted(true);
+        if (question) {
+          console.log("Speaking question:", question);
+          // Add a small delay to make transition smoother
+          setTimeout(() => {
+            const questionUtterance = new SpeechSynthesisUtterance(questionWithSpace);
+            questionUtterance.rate = 0.9;
+            questionUtterance.pitch = 1;
+
+            questionUtterance.onstart = () => {
+              console.log("Question started");
+            };
+
+            questionUtterance.onend = () => {
+              console.log("Question ended");
+              if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+              }
+              setWaveformHeights(Array.from({ length: 16 }, () => 20)); // Reset to base height
+            };
+
+            window.speechSynthesis.speak(questionUtterance);
+          }, 200); // 200ms delay for seamless transition
+        } else {
+          console.log("No question to speak");
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+          }
+          setWaveformHeights(Array.from({ length: 16 }, () => 20)); // Reset to base height
+        }
+      };
+
+      window.speechSynthesis.speak(greetingUtterance);
+    } else {
+      // Only speak question
+      if (question) {
+        const questionUtterance = new SpeechSynthesisUtterance(questionWithSpace);
+        questionUtterance.rate = 0.9;
+        questionUtterance.pitch = 1;
+
+        questionUtterance.onstart = () => {
+          console.log("Question started");
+          animateWaveformDuringSpeech();
+        };
+
+        questionUtterance.onend = () => {
+          console.log("Question ended");
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+          }
+          setWaveformHeights(Array.from({ length: 16 }, () => 20)); // Reset to base height
+        };
+
+        window.speechSynthesis.speak(questionUtterance);
+      } else {
+        console.log("No question to speak");
+        // Reset waveform if no question
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        setWaveformHeights(Array.from({ length: 16 }, () => 20)); // Reset to base height
+      }
+    }
+  };
+
+  // Auto-start speech after 5 seconds (only if questions are loaded)
+  useEffect(() => {
+    if (session?.user && hasFetchedQuestions) {
+      speechTimeoutRef.current = setTimeout(() => {
+        speakInterview();
+      }, 1000);
+    }
+
+    return () => {
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [session?.user, hasFetchedQuestions]);
+
   // replace inline SVGs with components
   const MicOnIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" height="24" width="24" aria-hidden="true">
@@ -243,10 +385,10 @@ export default function LiveInterviewStyled() {
               <h1 className="text-3xl md:text-4xl font-bold text-pink-600">Live Interview</h1>
               <p className="text-gray-600">Speak confidently — your session is being recorded and evaluated.</p>
             </div>
-            <div className="flex gap-3 items-center">
+            {/* <div className="flex gap-3 items-center">
               <div className="text-sm text-gray-500">Duration</div>
               <div className="px-3 py-2 bg-white rounded-lg shadow text-sm font-semibold">10 mins</div>
-            </div>
+            </div> */}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -254,7 +396,7 @@ export default function LiveInterviewStyled() {
             <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-md border border-pink-100 shadow-xl p-8 flex items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-4 mb-6">
-                  <img src={prismAvatar} alt="Prism" className="w-16 h-16 rounded-full ring-2 ring-pink-200 object-cover" />
+                  {/* <img src={prismAvatar} alt="Prism" className="w-16 h-16 rounded-full ring-2 ring-pink-200 object-cover" /> */}
                   <div>
                     <div className="text-sm text-gray-500">PRISM</div>
                     <div className="text-lg font-semibold text-gray-800">Your AI Interviewer</div>
@@ -278,17 +420,16 @@ export default function LiveInterviewStyled() {
                               className="bg-pink-400 rounded-sm"
                               style={{
                                 width: 6,
-                                height: `${20 + ((i % 6) * 8)}px`,
+                                height: `${waveformHeights[i]}px`,
                                 opacity: 0.9,
                                 transition: "height 250ms ease",
-                                animation: `pulseWave 1.2s ${i * 40}ms infinite`,
                               }}
                             />
                           ))}
                         </div>
-                        <div className="mt-3 text-sm text-gray-500">
+                        {/* <div className="mt-3 text-sm text-gray-500">
                           Time elapsed <span className="font-semibold text-gray-800 ml-2">{formatTime(seconds)}</span>
-                        </div>
+                        </div> */}
                       </div>
                     </div>
                   </div>
@@ -306,7 +447,7 @@ export default function LiveInterviewStyled() {
                     </div>
 
                     <div className="mt-3 flex items-center justify-between">
-                      <div className="text-xs text-gray-500">{questions.length ? `${currentQuestionIdx + 1} of ${questions.length}` : ""}</div>
+                      {/* <div className="text-xs text-gray-500">{questions.length ? `${currentQuestionIdx + 1} of ${questions.length}` : ""}</div> */}
                       <div className="flex gap-2">
                         <button
                           onClick={prevQuestion}
@@ -359,7 +500,7 @@ export default function LiveInterviewStyled() {
                 />
 
                 <div className="absolute top-4 left-4 z-10">
-                  <div className="text-xs text-gray-500">Software Developer</div>
+                  {/* <div className="text-xs text-gray-500">Software Developer</div> */}
                   <div className="text-lg font-semibold text-gray-800">{session?.user?.name || "User"}</div>
                 </div>
 
@@ -406,21 +547,21 @@ export default function LiveInterviewStyled() {
                   </button>
                 </div>
 
-                <div className="absolute left-4 bottom-4 z-20 bg-white/80 px-3 py-1 rounded-md text-xs shadow">
+                {/* <div className="absolute left-4 bottom-4 z-20 bg-white/80 px-3 py-1 rounded-md text-xs shadow">
                   <span className="font-semibold text-gray-800">{formatTime(seconds)}</span>
-                </div>
+                </div> */}
               </div>
                 {/* bottom floating stats (position inside relative parent) */}
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-28 w-max z-10">
                   <div className="bg-white rounded-full shadow-lg px-6 py-3 flex items-center gap-6 border border-pink-50">
                     <div className="text-xs text-gray-500">Duration</div>
-                    <div className="font-semibold text-pink-600">10 MIN</div>
+                    <div className="font-semibold text-pink-600">{formatTime(seconds)}</div>
                     <div className="h-6 w-px bg-gray-100" />
-                    <div className="text-xs text-gray-500">Avg Questions</div>
-                    <div className="font-semibold">12</div>
+                    <div className="text-xs text-gray-500">Question No.</div>
+                    <div className="font-semibold">{questions.length ? `${currentQuestionIdx + 1} / ${questions.length}` : ""}</div>
                     <div className="h-6 w-px bg-gray-100" />
-                    <div className="text-xs text-gray-500">Job Title</div>
-                    <div className="font-semibold">Frontend Developer</div>
+                    <div className="text-xs text-gray-500">Skill</div>
+                    <div className="font-semibold">{questions[currentQuestionIdx]?.skill || "Software Developer"}</div>
                   </div>
                 </div>
               <div className="h-12" />
