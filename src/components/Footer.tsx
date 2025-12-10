@@ -7,9 +7,9 @@ export default function Footer() {
           &copy; {new Date().getFullYear()} PRISM. All rights reserved.
         </p>
         <div className="flex gap-4 mt-2 sm:mt-0">
-          <a href="#" className="text-pink-300 hover:text-rose-300 hover:underline text-sm transition">Privacy</a>
-          <a href="#" className="text-pink-300 hover:text-rose-300 hover:underline text-sm transition">Terms</a>
-          <a href="#" className="text-pink-300 hover:text-rose-300 hover:underline text-sm transition">Contact</a>
+          <a className="text-pink-300 hover:text-rose-300 hover:underline text-sm transition">Privacy</a>
+          <a className="text-pink-300 hover:text-rose-300 hover:underline text-sm transition">Terms</a>
+          <a href="#" className="text-pink-300 hover:text-rose-300 hover:underline text-sm transition">About Us</a>
         </div>
       </div>
     </footer>
