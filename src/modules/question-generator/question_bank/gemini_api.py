@@ -103,39 +103,118 @@ def parse_response(text):
         keywords = [k.strip().strip('"') for k in kws.split(",") if k.strip()]
         data.append({"question": q, "keywords": keywords})
     return data
+import json
 
-def generate_questions_and_keywords(skill):
+def generate_questions_for_skills(skills):
     """
-    Generate 3 interview questions with expected keywords for a given skill.
-    Returns a list of dictionaries: [{"question": ..., "keywords": [...]}, ...]
+    Batch-generate questions for multiple skills in ONE Gemini call.
+
+    Input:
+        skills: ["Python", "React", "DBMS", ...]
+
+    Output:
+        A flat list of dicts:
+        [
+          {"skill": "Python", "text": "...", "keywords": ["...", ...]},
+          {"skill": "Python", "text": "...", "keywords": ["...", ...]},
+          {"skill": "React",  "text": "...", "keywords": ["...", ...]},
+          ...
+        ]
     """
     try:
         model_name = get_available_model()
         model = genai.GenerativeModel(model_name)
 
+        skills_json = json.dumps(skills)
+
         prompt = f"""
-        Generate 3 interview questions to test a candidate's knowledge of {skill}.
-        For each question, provide 3-5 important keywords that should be included in a good answer.
-        Return ONLY valid JSON in the following format:
+        You are an interview question generator.
+
+        You will receive a JSON array of skills:
+
+        {skills_json}
+
+        For EACH skill in that array, generate EXACTLY 3 interview questions
+        that test the candidate's knowledge of that skill.
+
+        For each question, also provide 3-5 important keywords that should
+        appear in a strong answer.
+
+        Return ONLY valid JSON in the following format (no extra text, no markdown):
 
         [
-          {{"question": "Question 1 text", "keywords": ["keyword1","keyword2","keyword3"]}},
-          {{"question": "Question 2 text", "keywords": ["keyword1","keyword2","keyword3"]}},
-          {{"question": "Question 3 text", "keywords": ["keyword1","keyword2","keyword3"]}}
+          {{"skill": "Python", "question": "Question text", "keywords": ["keyword1","keyword2","keyword3"]}},
+          {{"skill": "Python", "question": "Question text", "keywords": ["keyword1","keyword2","keyword3"]}},
+          {{"skill": "React",  "question": "Question text", "keywords": ["keyword1","keyword2","keyword3"]}},
+          ...
         ]
 
-        Do NOT include any extra text, numbering, or explanation.
+        Requirements:
+        - The top-level value MUST be a JSON array.
+        - Each object MUST contain "skill", "question", and "keywords".
+        - "skill" must be exactly one of the skills from the input array.
+        - Do NOT include comments, explanation, or any text outside the JSON array.
         """
 
         response = model.generate_content(prompt)
-        if response and hasattr(response, "text"):
-            data = parse_response(response.text)
-            if not data:  # fallback if parsing fails
-                data = [{"question": response.text.strip(), "keywords": []}]
-            return data
-        else:
-            return [{"question": f"Could not generate questions for {skill}.", "keywords": []}]
+
+        if not response or not hasattr(response, "text"):
+            print("ERROR: Gemini returned empty or invalid response")
+            return []
+
+        raw = response.text.strip()
+
+        # Try to extract the JSON array if there's any noise
+        try:
+            first = raw.find("[")
+            last = raw.rfind("]")
+            if first != -1 and last != -1:
+                raw_json = raw[first:last + 1]
+            else:
+                raw_json = raw
+
+            data = json.loads(raw_json)
+        except Exception as e:
+            print("ERROR parsing Gemini batch output:", e)
+            print("Raw output was:", raw)
+            return []
+
+        if not isinstance(data, list):
+            print("ERROR: Expected a JSON array from Gemini, got:", type(data))
+            return []
+
+        normalized = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+
+            skill = item.get("skill")
+            qtext = (
+                item.get("question")
+                or item.get("text")
+                or ""
+            )
+            keywords = item.get("keywords") or item.get("tags") or []
+
+            if not skill or not qtext:
+                continue
+
+            # Force keywords into a list of strings
+            if not isinstance(keywords, list):
+                keywords = [str(keywords)]
+            else:
+                keywords = [str(k) for k in keywords]
+
+            normalized.append(
+                {
+                    "skill": skill,
+                    "text": qtext,
+                    "keywords": keywords,
+                }
+            )
+
+        return normalized
 
     except Exception as e:
-        print(f"Error generating questions for {skill}: {e}")
-        return [{"question": f"Error: Unable to generate question for {skill}.", "keywords": []}]
+        print(f"Error generating batch questions for skills: {e}")
+        return []

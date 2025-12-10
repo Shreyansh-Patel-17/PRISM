@@ -39,24 +39,11 @@
 #     return all_questions
 
 
-from gemini_api import generate_questions_and_keywords
+from gemini_api import generate_questions_for_skills
 
 def get_questions_for_skills(skills):
     """
-    Returns a list of dictionaries:
-    [{"skill": skill, "text": question_text, "keywords": [kw1, kw2, ...]}, ...]
+    Batch wrapper: returns a flat list of:
+    [{"skill": skill, "text": question_text, "keywords": [...]}, ...]
     """
-    all_questions = []
-
-    for skill in skills:
-        # Generate dynamic questions with keywords
-        dynamic = generate_questions_and_keywords(skill)
-
-        for item in dynamic:
-            all_questions.append({
-                "skill": skill,
-                "text": item["question"],
-                "keywords": item["keywords"]
-            })
-
-    return all_questions
+    return generate_questions_for_skills(skills)
