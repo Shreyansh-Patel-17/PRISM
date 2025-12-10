@@ -1,46 +1,83 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import connectToDatabase from '@/lib/mongodb';
-import User from '@/models/User';
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import connectToDatabase from "@/lib/mongodb";
+import User from "@/models/User";
+
+type QuestionDTO = {
+  questionId: string;
+  text: string;
+  skill: string;
+  keywords: string[];
+};
 
 export async function GET(request: NextRequest) {
   try {
-    // Get session
+    // 1. Auth
     const session = await getServerSession();
     const email = session?.user?.email;
     if (!email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Connect to database
+    // 2. DB
     await connectToDatabase();
 
-    // Find user by email
     const user = await User.findOne({ email });
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Get stored questions
-    const generatedQuestions = user.generatedQuestions || new Map();
+    const rawGenerated = user.generatedQuestions;
 
-    // Flatten the questions into an array
-    const questions: { questionId?: string; text: string; skill?: string; keywords?: string[] }[] = [];
-    for (const [skill, qList] of generatedQuestions.entries()) {
-      qList.forEach((q: any, index: number) => {
-        questions.push({
-          questionId: `${skill}-${index}`,
-          text: q.text,
-          skill,
-          keywords: q.keywords || [],
+    // 3. If nothing stored yet, return empty list
+    if (!rawGenerated) return NextResponse.json([] as QuestionDTO[]);
+
+    const questions: QuestionDTO[] = [];
+
+    // -----------------------------
+    // SAFE HANDLING OF BOTH TYPES:
+    // - Mongoose Map: rawGenerated instanceof Map
+    // - Plain Object: typeof rawGenerated === 'object'
+    // -----------------------------
+    if (rawGenerated instanceof Map) {
+      // Mongoose Map case
+      rawGenerated.forEach((qList: any[], skill: string) => {
+        if (!Array.isArray(qList)) return;
+
+        qList.forEach((q, index) => {
+          if (!q?.text) return;
+          questions.push({
+            questionId: `${skill}-${index}`,
+            text: q.text,
+            skill,
+            keywords: Array.isArray(q.keywords) ? q.keywords : [],
+          });
+        });
+      });
+    } else {
+      // Plain JS object case (e.g. lean() or JSON)
+      Object.keys(rawGenerated).forEach((skill) => {
+        const qList = (rawGenerated as any)[skill];
+        if (!Array.isArray(qList)) return;
+
+        qList.forEach((q, index) => {
+          if (!q?.text) return;
+          questions.push({
+            questionId: `${skill}-${index}`,
+            text: q.text,
+            skill,
+            keywords: Array.isArray(q.keywords) ? q.keywords : [],
+          });
         });
       });
     }
 
     return NextResponse.json(questions);
-
   } catch (error: any) {
-    console.error('Error fetching questions:', error);
-    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
+    console.error("Error fetching questions:", error);
+    return NextResponse.json(
+      { error: error?.message || "Internal server error" },
+      { status: 500 }
+    );
   }
 }

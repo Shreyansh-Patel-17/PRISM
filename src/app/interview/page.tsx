@@ -21,6 +21,10 @@ export default function InterviewPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
+  // New state to track question generation
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [questionsGenerated, setQuestionsGenerated] = useState(false);
+
   const handleResumeUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!resume) return;
@@ -52,13 +56,43 @@ export default function InterviewPage() {
     }
   };
 
-  const handleStartInterview = () => {
+  const handleStartInterview = async () => {
     if (!uploadSuccess) {
       alert("Please upload your resume first.");
       return;
     }
-    // Navigate to actual interview page
-    router.push("/interview/live");
+
+    // If already generated this session, proceed immediately
+    if (questionsGenerated) {
+      router.push("/interview/live");
+      return;
+    }
+
+    setIsGeneratingQuestions(true);
+    try {
+      const res = await fetch("/api/generate-questions", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        // mark as generated even if API reported alreadyGenerated or returned questions
+        setQuestionsGenerated(true);
+        router.push("/interview/live");
+        return;
+      } else {
+        if (res.status === 401) {
+          // not authorized -> force signin
+          router.push("/signin");
+          return;
+        }
+        const err = await res.json().catch(() => ({}));
+        const msg = err?.error || "Failed to generate interview questions. Please try again.";
+        alert(msg);
+      }
+    } catch (e) {
+      console.error("Failed to generate questions:", e);
+      alert("Failed to generate interview questions. Please try again.");
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
   };
 
   return (
@@ -125,10 +159,10 @@ export default function InterviewPage() {
 
         <button
           onClick={handleStartInterview}
-          disabled={!uploadSuccess}
+          disabled={!uploadSuccess || isGeneratingQuestions}
           className="px-8 py-3 rounded-lg bg-gradient-to-r from-pink-500 to-rose-400 text-white font-semibold shadow-lg hover:opacity-90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Start Interview
+          {isGeneratingQuestions ? "Preparing Interview..." : "Start Interview"}
         </button>
       </section>
     </LayoutWrapper>
