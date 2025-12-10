@@ -19,6 +19,8 @@ export default function LiveInterviewStyled() {
   const [seconds, setSeconds] = useState(0);
   const timerRef = useRef<number | null>(null);
   const [isMediaStarted, setIsMediaStarted] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
 
   const { data: session } = useSession();
 
@@ -151,14 +153,135 @@ export default function LiveInterviewStyled() {
     setMicOn(t.enabled);
   };
 
-  // start/stop recording (UI-only; integrate MediaRecorder as needed)
+  // start/stop recording
   const toggleRecording = async () => {
     if (!isMediaStarted) {
       await startMedia();
       // small delay to ensure tracks available
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
+
+    if (isRecording) {
+      // Stop recording
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    } else {
+      // Start recording
+      if (streamRef.current) {
+        recordedChunksRef.current = [];
+
+        // Create audio-only stream for recording
+        const audioStream = new MediaStream(streamRef.current.getAudioTracks());
+
+        // Try different MIME types for audio-only recording
+        let mimeType = 'audio/webm;codecs=opus';
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+          mimeType = 'audio/ogg;codecs=opus';
+        }
+
+        try {
+          mediaRecorderRef.current = new MediaRecorder(audioStream, {
+            mimeType: mimeType
+          });
+
+          mediaRecorderRef.current.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              recordedChunksRef.current.push(event.data);
+            }
+          };
+
+          mediaRecorderRef.current.onstop = async () => {
+            const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+            await processAudio(blob);
+          };
+
+          mediaRecorderRef.current.start();
+        } catch (error) {
+          console.error('MediaRecorder creation failed:', error);
+          // Fallback: try without specifying mimeType
+          try {
+            mediaRecorderRef.current = new MediaRecorder(audioStream);
+
+            mediaRecorderRef.current.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                recordedChunksRef.current.push(event.data);
+              }
+            };
+
+            mediaRecorderRef.current.onstop = async () => {
+              const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+              await processAudio(blob);
+            };
+
+            mediaRecorderRef.current.start();
+          } catch (fallbackError) {
+            console.error('MediaRecorder fallback also failed:', fallbackError);
+            alert('Recording is not supported in this browser. Please try a different browser like Chrome or Firefox.');
+            setIsRecording(false);
+          }
+        }
+      }
+    }
+
     setIsRecording((r) => !r);
-    // TODO: add MediaRecorder wiring to actually record
+  };
+
+  // Process recorded audio: send to STT, then to evaluator
+  const processAudio = async (audioBlob: Blob) => {
+    try {
+      // Send to STT API
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+
+      const sttResponse = await fetch('/api/speech-to-text', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!sttResponse.ok) {
+        console.error('STT API failed');
+        return;
+      }
+
+      const sttData = await sttResponse.json();
+      const transcription = sttData.transcription;
+
+      if (!transcription) {
+        console.error('No transcription received');
+        return;
+      }
+
+      // Send transcription to evaluator
+      const currentQuestion = questions[currentQuestionIdx];
+      if (!currentQuestion) {
+        console.error('No current question');
+        return;
+      }
+
+      const evalResponse = await fetch('/api/response-evaluator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          response: transcription,
+          question: currentQuestion,
+        }),
+      });
+
+      if (evalResponse.ok) {
+        const evalData = await evalResponse.json();
+        console.log('Evaluation result:', evalData);
+        // TODO: Display evaluation result in UI
+      } else {
+        console.error('Evaluator API failed');
+      }
+    } catch (error) {
+      console.error('Error processing audio:', error);
+    }
   };
 
   const endInterview = () => {
