@@ -1,0 +1,18 @@
+# Consolidated Python dependencies detected under src/
+# Versions are preserved from existing module `requirements.txt` files where available.
+# Note: install spaCy language model with:
+#   python -m spacy download en_core_web_sm
+
+nltk==3.9.1
+textblob==0.18.0
+sentence-transformers==3.3.1
+torch==2.5.1
+transformers==4.47.0
+speech_recognition==3.10.0
+pyttsx3==2.90
+python-dotenv
+google-generativeai
+PyPDF2
+spacy
+gTTS
+pygame
