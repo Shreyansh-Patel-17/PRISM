@@ -10,7 +10,7 @@ It provides users with a full interview simulation — and detailed feedback on 
 Many developers struggle to objectively assess their interview readiness. PRISM helps by offering:
 
 * Automatic generation of relevant technical & soft-skill questions based on your actual skill set
-* Ability to answer via microphone (speech → text) or optionally via text
+* Ability to answer via microphone (speech → text)
 * Semantic & keyword-based evaluation of answers, plus sentiment scoring
 * Skill scoring (0–100) per topic, tracked over time
 * A dashboard highlighting your strong skills and weak areas — so you know what to improve
@@ -21,7 +21,7 @@ Many developers struggle to objectively assess their interview readiness. PRISM 
 
 ## 📁 Project Structure (at a glance)
 
-```
+```graphql
 /
 ├── src/
 │   ├── app/            # Next.js App Router pages + UI components
@@ -90,7 +90,7 @@ npm install
 
 Create a `.env.local` file (or set environment variables):
 
-```
+```ini
 MONGODB_URI=your_mongo_connection_string
 NEXTAUTH_SECRET=your_secret_key
 NEXTAUTH_URL=http://localhost:3000

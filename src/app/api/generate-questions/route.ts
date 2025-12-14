@@ -63,20 +63,29 @@ async function generateQuestions(skills: string[]): Promise<any[]> {
       errorOutput += chunk;
     });
 
-    const TIMEOUT_MS = 30_000;
+    const TIMEOUT_MS = 90_000;
     const timeout = setTimeout(() => {
       try {
         pythonProcess.kill();
       } catch {}
     }, TIMEOUT_MS);
 
-    pythonProcess.on("close", (code: number | null) => {
+    pythonProcess.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
       clearTimeout(timeout);
       console.log("[generateQuestions] Python exited with code:", code);
       if (errorOutput) {
         console.log("[generateQuestions] stderr:", errorOutput);
       }
       console.log("[generateQuestions] raw stdout:", output);
+      
+      if (signal) {
+        reject(
+          new Error(
+            `Python process killed by signal ${signal}. stderr: ${errorOutput.trim()}`
+          )
+        );
+        return;
+      }
 
       if (code !== 0) {
         reject(
