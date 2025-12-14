@@ -275,7 +275,6 @@ export default function LiveInterviewStyled() {
       if (evalResponse.ok) {
         const evalData = await evalResponse.json();
         console.log('Evaluation result:', evalData);
-        // TODO: Display evaluation result in UI
       } else {
         console.error('Evaluator API failed');
       }
@@ -338,7 +337,7 @@ export default function LiveInterviewStyled() {
     }
 
     const username = session?.user?.name || "User";
-    const greeting = ` Hello ${username}, let's start the interview`; // Add leading space and fix "lets" to "let's"
+    const greeting = `  Hello ${username}, let's start the interview`; // Add leading space
     const question = questions[currentQuestionIdx]?.text || "";
     const questionWithSpace = " " + question; // Add leading space to prevent skipping start
 
@@ -425,7 +424,7 @@ export default function LiveInterviewStyled() {
     }
   };
 
-  // Auto-start speech after 5 seconds (only if questions are loaded)
+  // Auto-start speech after a seconds (only if questions are loaded)
   useEffect(() => {
     if (session?.user && hasFetchedQuestions) {
       speechTimeoutRef.current = setTimeout(() => {
@@ -666,7 +665,11 @@ export default function LiveInterviewStyled() {
                     aria-label="Hangup"
                     className="w-12 h-12 flex items-center justify-center rounded-full bg-white hover:scale-105 transition shadow"
                   >
-                    <svg className="w-6 h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16.5V21a1 1 0 01-1.37.93A19.94 19.94 0 012 12 19.94 19.94 0 0119.63 2.07 1 1 0 0121 3v4.5z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" className="w-6 h-6 text-red-600" aria-hidden="true">
+                      <desc>Phone Hangup Streamline Icon</desc>
+                      <path fill="currentColor" d="M15.333333333333332 8.333333333333332 13.666666666666666 10l-2 -1.3333333333333333V5.894666666666667C10.650666666666666 5.558 9.430666666666667 5.333333333333333 8 5.333333333333333c-1.43 0 -2.6506666666666665 0.22466666666666668 -3.6666666666666665 0.5613333333333332V8.666666666666666l-2 1.3333333333333333L0.6666666666666666 8.333333333333332c0.44333333333333336 -0.6646666666666666 1.6526666666666667 -1.7713333333333332 3.6666666666666665 -2.4386666666666663C5.349333333333332 5.558 6.57 5.333333333333333 8 5.333333333333333c1.4306666666666665 0 2.6506666666666665 0.22466666666666668 3.6666666666666665 0.5613333333333332 2.014 0.6666666666666666 3.223333333333333 1.7733333333333334 3.6666666666666665 2.4386666666666663z" strokeWidth={0.6667}></path>
+                      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.3333} d="M11.666666666666666 5.894666666666667C10.650666666666666 5.558 9.430666666666667 5.333333333333333 8 5.333333333333333c-1.43 0 -2.6506666666666665 0.22466666666666668 -3.6666666666666665 0.5613333333333332m7.333333333333333 0c2.014 0.6666666666666666 3.223333333333333 1.7733333333333334 3.6666666666666665 2.4386666666666663L13.666666666666666 10l-2 -1.3333333333333333V5.894666666666667zm-7.333333333333333 0c-2.014 0.6666666666666666 -3.223333333333333 1.7733333333333334 -3.6666666666666665 2.4386666666666663L2.333333333333333 10l2 -1.3333333333333333V5.894666666666667z"></path>
+                    </svg>
                   </button>
                 </div>
 

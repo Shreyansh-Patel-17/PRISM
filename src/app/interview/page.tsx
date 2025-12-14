@@ -103,7 +103,7 @@ export default function InterviewPage() {
 
       <section className="flex flex-col items-center justify-center flex-grow text-center px-6 z-10 relative">
         <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-6 drop-shadow-lg text-pink-600">
-          Interview Mode
+          Mock Interview
         </h2>
         <p className="text-gray-700 /* dark:text-pink-100 */ mb-10 max-w-xl text-lg md:text-xl leading-relaxed">
           Upload your resume to get started with your{" "}
