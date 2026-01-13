@@ -325,10 +325,13 @@ export default function LiveInterviewStyled() {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
 
-      const sttResponse = await fetch('/api/speech-to-text', {
-        method: 'POST',
-        body: formData,
-      });
+      const sttResponse = await fetch(
+        process.env.NEXT_PUBLIC_AI_BACKEND_URL + "/speech-to-text",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (!sttResponse.ok) {
         console.error('STT API failed');
