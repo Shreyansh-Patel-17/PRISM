@@ -3,24 +3,31 @@ import json
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# Load variables from .env.local in project root
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../../../../.env.local'))
+load_dotenv()
 
-# Get the key securely
 api_key = os.getenv("GEMINI_API_KEY")
 
-# Configure Gemini with the hidden key
-genai.configure(api_key=api_key)
+if not api_key:
+    raise RuntimeError("GEMINI_API_KEY not found in environment")
 
+genai.configure(api_key=api_key)
 
 MODEL_PRIORITY = ["models/gemini-2.5-flash", "models/gemini-2.0-flash", "models/gemini-pro"]
 
+_MODEL_NAME = None
+
 def get_available_model():
+    global _MODEL_NAME
+    if _MODEL_NAME:
+        return _MODEL_NAME
+
     available = [m.name for m in genai.list_models()]
     for candidate in MODEL_PRIORITY:
         if candidate in available:
-            return candidate
-    raise RuntimeError("No valid Gemini model available for this API key.")
+            _MODEL_NAME = candidate
+            return _MODEL_NAME
+
+    raise RuntimeError("No valid Gemini model available")
 
 
 def generate_questions_for_skills(skills):
@@ -52,7 +59,7 @@ def generate_questions_for_skills(skills):
 
         {skills_json}
 
-        For EACH skill in that array, generate EXACTLY 3 interview questions
+        For EACH skill in that array, generate EXACTLY 2 interview questions
         that test the candidate's knowledge of that skill.
 
         For each question, also provide 3-5 important keywords that should
@@ -93,7 +100,9 @@ def generate_questions_for_skills(skills):
 
             data = json.loads(raw_json)
         except Exception as e:
-            print("ERROR parsing Gemini batch output:", e)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("Gemini parsing error", exc_info=True)
             print("Raw output was:", raw)
             return []
 

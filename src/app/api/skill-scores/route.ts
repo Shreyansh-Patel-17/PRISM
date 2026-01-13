@@ -3,10 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
+import { authOptions } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     const email = session?.user?.email;
 
     if (!email) {

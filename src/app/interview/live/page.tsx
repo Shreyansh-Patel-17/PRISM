@@ -10,6 +10,68 @@ type Question = {
   skill?: string;
 };
 
+const loadVoices = (): Promise<SpeechSynthesisVoice[]> => {
+  return new Promise((resolve) => {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) {
+      resolve(voices);
+    } else {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const v = window.speechSynthesis.getVoices();
+        if (v.length) resolve(v);
+      };
+    }
+  });
+};
+
+// ---------- TTS HELPER ----------
+const speakTextAsync = (
+  text: string,
+  setIsSpeaking: (v: boolean) => void,
+  onStart?: () => void,
+  onEnd?: () => void
+): Promise<void> => {
+  return new Promise(async (resolve) => {
+    if (!("speechSynthesis" in window)) {
+      resolve();
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    await new Promise((r) => setTimeout(r, 100));
+
+    const voices = await loadVoices();
+    const voice =
+      voices.find(v => v.lang.startsWith("en") && v.name.includes("Google")) ||
+      voices.find(v => v.lang.startsWith("en")) ||
+      voices[0];
+
+    if (!voice) {
+      resolve();
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(" " + text);
+    utterance.voice = voice;
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+      onStart?.();
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      onEnd?.();
+      resolve(); // ✅ THIS is the key
+    };
+
+    window.speechSynthesis.speak(utterance);
+  });
+};
+
 export default function LiveInterviewStyled() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -21,6 +83,8 @@ export default function LiveInterviewStyled() {
   const [isMediaStarted, setIsMediaStarted] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const introTimeoutRef = useRef<number | null>(null);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const { data: session } = useSession();
 
@@ -28,12 +92,10 @@ export default function LiveInterviewStyled() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [waveformHeights, setWaveformHeights] = useState<number[]>(Array.from({ length: 16 }, () => 20));
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [hasGreeted, setHasGreeted] = useState(false);
   const [hasFetchedQuestions, setHasFetchedQuestions] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   // start camera & mic
   const startMedia = async () => {
@@ -74,8 +136,18 @@ export default function LiveInterviewStyled() {
   // cleanup on unmount
   useEffect(() => {
     fetchQuestions(); // load questions once on mount
+    if (introTimeoutRef.current) {
+      clearTimeout(introTimeoutRef.current);
+    }
+    window.speechSynthesis.cancel();
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (isSpeaking) {
+        window.speechSynthesis.cancel();
+      }
+
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
       stopMedia();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,6 +177,25 @@ export default function LiveInterviewStyled() {
       console.error("Error fetching questions:", err);
     }
   }
+  
+  // Animate waveform during speech
+  const animateWaveformDuringSpeech = () => {
+    let phase = 0;
+    let lastTime = 0;
+    const animate = (currentTime: number) => {
+      if (currentTime - lastTime >= 6) { // ~60fps
+        lastTime = currentTime;
+        phase += 0.1;
+        const newHeights = Array.from({ length: 16 }, (_, i) => {
+          const wave = Math.sin(phase + i * 0.5) * 24 + 25; // Sine wave between 1-49px
+          return Math.max(1, Math.min(50, wave));
+        });
+        setWaveformHeights(newHeights);
+      }
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+    animationFrameRef.current = requestAnimationFrame(animate);
+  };
 
   // recording timer (visual only)
   useEffect(() => {
@@ -121,13 +212,6 @@ export default function LiveInterviewStyled() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isRecording]);
-
-  // AUTO ADVANCE QUESTION
-  useEffect(() => {
-    if (!isRecording && questions.length > 0) {
-      setCurrentQuestionIdx((i) => Math.min(i + 1, questions.length - 1));
-    }
-  }, [isRecording, questions.length]);
 
   // toggle camera
   const toggleCamera = async () => {
@@ -155,6 +239,8 @@ export default function LiveInterviewStyled() {
 
   // start/stop recording
   const toggleRecording = async () => {
+    if (isSpeaking) return;
+
     if (!isMediaStarted) {
       await startMedia();
       // small delay to ensure tracks available
@@ -168,6 +254,7 @@ export default function LiveInterviewStyled() {
       }
     } else {
       // Start recording
+      window.speechSynthesis.cancel();
       if (streamRef.current) {
         recordedChunksRef.current = [];
 
@@ -238,10 +325,13 @@ export default function LiveInterviewStyled() {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
 
-      const sttResponse = await fetch('/api/speech-to-text', {
-        method: 'POST',
-        body: formData,
-      });
+      const sttResponse = await fetch(
+        process.env.NEXT_PUBLIC_AI_BACKEND_URL + "/speech-to-text",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (!sttResponse.ok) {
         console.error('STT API failed');
@@ -307,143 +397,6 @@ export default function LiveInterviewStyled() {
   const prevQuestion = () => {
     setCurrentQuestionIdx((i) => Math.max(i - 1, 0));
   };
-
-
-
-  // Animate waveform during speech
-  const animateWaveformDuringSpeech = () => {
-    let phase = 0;
-    let lastTime = 0;
-    const animate = (currentTime: number) => {
-      if (currentTime - lastTime >= 6) { // ~60fps
-        lastTime = currentTime;
-        phase += 0.1;
-        const newHeights = Array.from({ length: 16 }, (_, i) => {
-          const wave = Math.sin(phase + i * 0.5) * 24 + 25; // Sine wave between 1-49px
-          return Math.max(1, Math.min(50, wave));
-        });
-        setWaveformHeights(newHeights);
-      }
-      animationFrameRef.current = requestAnimationFrame(animate);
-    };
-    animationFrameRef.current = requestAnimationFrame(animate);
-  };
-
-  // Speak greeting and question
-  const speakInterview = () => {
-    if (!('speechSynthesis' in window)) {
-      console.warn("Speech synthesis not supported");
-      return;
-    }
-
-    const username = session?.user?.name || "User";
-    const greeting = `  Hello ${username}, let's start the interview`; // Add leading space
-    const question = questions[currentQuestionIdx]?.text || "";
-    const questionWithSpace = " " + question; // Add leading space to prevent skipping start
-
-    console.log("Speaking interview:");
-    console.log("Questions loaded:", questions.length);
-    console.log("Current question index:", currentQuestionIdx);
-    console.log("Question text:", question);
-
-    if (!hasGreeted) {
-      // Speak greeting first
-      const greetingUtterance = new SpeechSynthesisUtterance(greeting);
-      greetingUtterance.rate = 0.9;
-      greetingUtterance.pitch = 1;
-
-      greetingUtterance.onstart = () => {
-        console.log("Greeting started");
-        animateWaveformDuringSpeech();
-      };
-
-      greetingUtterance.onend = () => {
-        console.log("Greeting ended");
-        setHasGreeted(true);
-        if (question) {
-          console.log("Speaking question:", question);
-          // Add a small delay to make transition smoother
-          setTimeout(() => {
-            const questionUtterance = new SpeechSynthesisUtterance(questionWithSpace);
-            questionUtterance.rate = 0.9;
-            questionUtterance.pitch = 1;
-
-            questionUtterance.onstart = () => {
-              console.log("Question started");
-            };
-
-            questionUtterance.onend = () => {
-              console.log("Question ended");
-              if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-              }
-              setWaveformHeights(Array.from({ length: 16 }, () => 20)); // Reset to base height
-            };
-
-            window.speechSynthesis.speak(questionUtterance);
-          }, 200); // 200ms delay for seamless transition
-        } else {
-          console.log("No question to speak");
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-          }
-          setWaveformHeights(Array.from({ length: 16 }, () => 20)); // Reset to base height
-        }
-      };
-
-      window.speechSynthesis.speak(greetingUtterance);
-    } else {
-      // Only speak question
-      if (question) {
-        const questionUtterance = new SpeechSynthesisUtterance(questionWithSpace);
-        questionUtterance.rate = 0.9;
-        questionUtterance.pitch = 1;
-
-        questionUtterance.onstart = () => {
-          console.log("Question started");
-          animateWaveformDuringSpeech();
-        };
-
-        questionUtterance.onend = () => {
-          console.log("Question ended");
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-          }
-          setWaveformHeights(Array.from({ length: 16 }, () => 20)); // Reset to base height
-        };
-
-        window.speechSynthesis.speak(questionUtterance);
-      } else {
-        console.log("No question to speak");
-        // Reset waveform if no question
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        setWaveformHeights(Array.from({ length: 16 }, () => 20)); // Reset to base height
-      }
-    }
-  };
-
-  // Auto-start speech after a seconds (only if questions are loaded)
-  useEffect(() => {
-    if (session?.user && hasFetchedQuestions) {
-      speechTimeoutRef.current = setTimeout(() => {
-        speakInterview();
-      }, 1000);
-    }
-
-    return () => {
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-      }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, [session?.user, hasFetchedQuestions]);
 
   // replace inline SVGs with components
   const MicOnIcon = () => (
@@ -527,8 +480,9 @@ export default function LiveInterviewStyled() {
 
                 <div className="flex flex-col gap-6 w-full">
                   <div className="flex-1">
-                    <div className="text-2xl font-semibold text-gray-800 mb-2">Speaking...</div>
-
+                    <div className="text-2xl font-semibold text-gray-800 mb-2">
+                      {isSpeaking ? "Speaking..." : "Listening..."}
+                    </div>
                     <div className="flex items-center gap-4">
                       <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-inner">
                         <img src={prismAvatar} alt="prism" className="w-16 h-16 rounded-full object-cover" />
@@ -690,6 +644,48 @@ export default function LiveInterviewStyled() {
                     <div className="font-semibold">{questions[currentQuestionIdx]?.skill || "Software Developer"}</div>
                   </div>
                 </div>
+                {!audioUnlocked && (
+                    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+                      <button
+                        onClick={async () => {
+                          setAudioUnlocked(true);
+                                                
+                          const username = session?.user?.name || "User";
+                          const firstQuestion = questions[0]?.text;
+                                                
+                          // 🔓 MUST speak here (inside user gesture)
+                          await speakTextAsync(
+                            `Hello ${username}, let's start the interview.`,
+                            setIsSpeaking,
+                            animateWaveformDuringSpeech,
+                            () => {
+                              if (animationFrameRef.current) {
+                                cancelAnimationFrame(animationFrameRef.current);
+                              }
+                              setWaveformHeights(Array.from({ length: 16 }, () => 20));
+                            }
+                          );
+                        
+                          await speakTextAsync(
+                            firstQuestion,
+                            setIsSpeaking,
+                            animateWaveformDuringSpeech,
+                            () => {
+                              if (animationFrameRef.current) {
+                                cancelAnimationFrame(animationFrameRef.current);
+                              }
+                              setWaveformHeights(Array.from({ length: 16 }, () => 20));
+                            }
+                          );
+                        
+                          setHasGreeted(true);
+                        }}
+                        className="px-6 py-3 bg-pink-600 text-white rounded-xl shadow-xl text-lg"
+                      >
+                        Start Interview
+                      </button>
+                    </div>
+                  )}
               <div className="h-12" />
             </div>
           </div>

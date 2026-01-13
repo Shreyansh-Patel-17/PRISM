@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
+import { authOptions } from "@/lib/auth";
 
 type QuestionDTO = {
   questionId: string;
@@ -13,7 +14,7 @@ type QuestionDTO = {
 export async function GET(request: NextRequest) {
   try {
     // 1. Auth
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     const email = session?.user?.email;
     if (!email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
