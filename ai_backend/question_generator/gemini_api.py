@@ -1,14 +1,12 @@
 import os
 import json
-from dotenv import load_dotenv
 import google.generativeai as genai
 
-load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-    raise RuntimeError("GEMINI_API_KEY not found in environment")
+    raise RuntimeError("GEMINI_API_KEY not set")
 
 genai.configure(api_key=api_key)
 
@@ -46,6 +44,10 @@ def generate_questions_for_skills(skills):
           ...
         ]
     """
+
+    skills = skills[:10]           # max 10 skills
+    MAX_KEYWORDS_PER_Q = 5
+
     try:
         model_name = get_available_model()
         model = genai.GenerativeModel(model_name)
@@ -83,7 +85,7 @@ def generate_questions_for_skills(skills):
 
         response = model.generate_content(prompt)
 
-        if not response or not hasattr(response, "text"):
+        if not response or not getattr(response, "text", None):
             print("ERROR: Gemini returned empty or invalid response")
             return []
 
@@ -136,7 +138,7 @@ def generate_questions_for_skills(skills):
                 {
                     "skill": skill,
                     "text": qtext,
-                    "keywords": keywords,
+                    "keywords": [str(k) for k in keywords[:MAX_KEYWORDS_PER_Q]]
                 }
             )
 

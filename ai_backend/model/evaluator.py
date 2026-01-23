@@ -8,8 +8,6 @@ import os
 
 _MODEL = None
 
-MODEL_DIR = os.getenv("MODEL_DIR", "./models")
-
 def get_embedding_model():
     """
     Lazily initialize and cache the SentenceTransformer model.
@@ -17,8 +15,10 @@ def get_embedding_model():
     """
     global _MODEL
     if _MODEL is None:
-        # You can swap model name here if needed
-        _MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+        _MODEL = SentenceTransformer(
+            "all-MiniLM-L6-v2",
+            device="cpu"
+        )
     return _MODEL
 
 
