@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 import tempfile
 
 from resume_parser.parser import extract_text, extract_skills
-from question_generator.service import generate
+from question_generator.service import generate_questions
 from response_evaluator.evaluator import evaluate
 
 app = FastAPI(title="PRISM AI Backend")
@@ -50,7 +50,7 @@ def generate_questions_api(payload: dict):
     if not isinstance(skills, list) or not skills:
         raise HTTPException(status_code=400, detail="skills must be a non-empty list")
 
-    return generate(skills)
+    return generate_questions(skills)
 
 
 # -------------------------
