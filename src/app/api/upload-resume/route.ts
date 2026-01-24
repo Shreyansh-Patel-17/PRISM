@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   await rateLimit(req);
 
-  const backendUrl = process.env.NEXT_PUBLIC_AI_BACKEND_URL;
+  const backendUrl = process.env.AI_BACKEND_URL;
   if (!backendUrl) {
     return NextResponse.json(
       { error: "Backend service not configured" },

@@ -1,5 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import tempfile
+import os
 
 from resume_parser.parser import extract_text, extract_skills
 from question_generator.service import generate_questions
@@ -7,6 +9,15 @@ from response_evaluator.evaluator import evaluate
 
 app = FastAPI(title="PRISM AI Backend")
 
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # -------------------------
 # Health check

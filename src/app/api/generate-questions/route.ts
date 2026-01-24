@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_AI_BACKEND_URL;
+    const backendUrl = process.env.AI_BACKEND_URL;
     if (!backendUrl) {
       return NextResponse.json(
         { error: "AI backend URL not configured" },
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Return cached questions
-    if (user.generatedQuestions && user.generatedQuestions.size > 0) {
+    if (user.generatedQuestions && Object.keys(user.generatedQuestions || {}).length > 0) {
       return NextResponse.json({
         alreadyGenerated: true,
         questions: Object.fromEntries(user.generatedQuestions as any),
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
     const backendRes = await fetch(`${backendUrl}/generate-questions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ skills }),
     });
 
