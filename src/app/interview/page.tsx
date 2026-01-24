@@ -23,7 +23,6 @@ export default function InterviewPage() {
 
   // New state to track question generation
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
-  const [questionsGenerated, setQuestionsGenerated] = useState(false);
 
   const handleResumeUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -38,6 +37,7 @@ export default function InterviewPage() {
       const res = await fetch("/api/upload-resume", {
         method: "POST",
         body: formData,
+        credentials: "include",
       });
 
       if (res.ok) {
@@ -57,43 +57,40 @@ export default function InterviewPage() {
   };
 
   const handleStartInterview = async () => {
-    if (!uploadSuccess) {
-      alert("Please upload your resume first.");
-      return;
-    }
+  if (!uploadSuccess) {
+    alert("Please upload your resume first.");
+    return;
+  }
 
-    // If already generated this session, proceed immediately
-    if (questionsGenerated) {
+  setIsGeneratingQuestions(true);
+
+  try {
+    const res = await fetch("/api/generate-questions", {
+      method: "POST",
+      credentials: "include", // 🔴 IMPORTANT
+    });
+
+    if (res.ok) {
+      // Backend guarantees questions now exist
       router.push("/interview/live");
       return;
     }
 
-    setIsGeneratingQuestions(true);
-    try {
-      const res = await fetch("/api/generate-questions", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        // mark as generated even if API reported alreadyGenerated or returned questions
-        setQuestionsGenerated(true);
-        router.push("/interview/live");
-        return;
-      } else {
-        if (res.status === 401) {
-          // not authorized -> force signin
-          router.push("/signin");
-          return;
-        }
-        const err = await res.json().catch(() => ({}));
-        const msg = err?.error || "Failed to generate interview questions. Please try again.";
-        alert(msg);
-      }
-    } catch (e) {
-      console.error("Failed to generate questions:", e);
-      alert("Failed to generate interview questions. Please try again.");
-    } finally {
-      setIsGeneratingQuestions(false);
+    if (res.status === 401) {
+      router.push("/signin");
+      return;
     }
-  };
+
+    const err = await res.json().catch(() => ({}));
+    alert(err?.error || "Failed to prepare interview. Please try again.");
+  } catch (e) {
+    console.error("Failed to generate questions:", e);
+    alert("Failed to prepare interview. Please try again.");
+  } finally {
+    setIsGeneratingQuestions(false);
+  }
+};
+
 
   return (
     <LayoutWrapper>

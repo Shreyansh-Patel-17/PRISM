@@ -4,6 +4,51 @@ import LayoutWrapper from "@/components/LayoutWrapper";
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
+declare global {
+  interface Window {
+    webkitSpeechRecognition: any;
+    SpeechRecognition: any;
+  }
+}
+
+let recognition: any = null;
+
+function startBrowserSTT(
+  onResult: (text: string) => void,
+  onError: (err: any) => void
+) {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert("Speech Recognition not supported. Use Chrome / Edge.");
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
+  recognition.continuous = false;
+
+  recognition.onresult = (event: any) => {
+    const transcript = event.results[0][0].transcript;
+    onResult(transcript);
+  };
+
+  recognition.onerror = (e: any) => {
+    console.error("STT error:", e);
+    onError(e);
+  };
+
+  recognition.start();
+}
+
+function stopBrowserSTT() {
+  try {
+    recognition?.stop();
+  } catch {}
+}
+
 type Question = {
   questionId?: string;
   text: string;
@@ -81,8 +126,8 @@ export default function LiveInterviewStyled() {
   const [seconds, setSeconds] = useState(0);
   const timerRef = useRef<number | null>(null);
   const [isMediaStarted, setIsMediaStarted] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
+  // const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  // const recordedChunksRef = useRef<Blob[]>([]);
   const introTimeoutRef = useRef<number | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
@@ -239,139 +284,67 @@ export default function LiveInterviewStyled() {
 
   // start/stop recording
   const toggleRecording = async () => {
-    if (isSpeaking) return;
+  if (isSpeaking) return;
 
-    if (!isMediaStarted) {
-      await startMedia();
-      // small delay to ensure tracks available
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
+  if (!isMediaStarted) {
+    await startMedia();
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
 
-    if (isRecording) {
-      // Stop recording
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-    } else {
-      // Start recording
-      window.speechSynthesis.cancel();
-      if (streamRef.current) {
-        recordedChunksRef.current = [];
+  if (isRecording) {
+    // STOP recording
+    stopBrowserSTT();
+    setIsRecording(false);
+    return;
+  }
 
-        // Create audio-only stream for recording
-        const audioStream = new MediaStream(streamRef.current.getAudioTracks());
+  // START recording
+  window.speechSynthesis.cancel();
+  setIsRecording(true);
 
-        // Try different MIME types for audio-only recording
-        let mimeType = 'audio/webm;codecs=opus';
-        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-          mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
-          mimeType = 'audio/ogg;codecs=opus';
-        }
-
-        try {
-          mediaRecorderRef.current = new MediaRecorder(audioStream, {
-            mimeType: mimeType
-          });
-
-          mediaRecorderRef.current.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              recordedChunksRef.current.push(event.data);
-            }
-          };
-
-          mediaRecorderRef.current.onstop = async () => {
-            const blob = new Blob(recordedChunksRef.current, { type: mimeType });
-            await processAudio(blob);
-          };
-
-          mediaRecorderRef.current.start();
-        } catch (error) {
-          console.error('MediaRecorder creation failed:', error);
-          // Fallback: try without specifying mimeType
-          try {
-            mediaRecorderRef.current = new MediaRecorder(audioStream);
-
-            mediaRecorderRef.current.ondataavailable = (event) => {
-              if (event.data.size > 0) {
-                recordedChunksRef.current.push(event.data);
-              }
-            };
-
-            mediaRecorderRef.current.onstop = async () => {
-              const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
-              await processAudio(blob);
-            };
-
-            mediaRecorderRef.current.start();
-          } catch (fallbackError) {
-            console.error('MediaRecorder fallback also failed:', fallbackError);
-            alert('Recording is not supported in this browser. Please try a different browser like Chrome or Firefox.');
-            setIsRecording(false);
-          }
-        }
-      }
-    }
-
-    setIsRecording((r) => !r);
-  };
-
-  // Process recorded audio: send to STT, then to evaluator
-  const processAudio = async (audioBlob: Blob) => {
-    try {
-      // Send to STT API
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
-
-      const sttResponse = await fetch(
-        process.env.NEXT_PUBLIC_AI_BACKEND_URL + "/speech-to-text",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      if (!sttResponse.ok) {
-        console.error('STT API failed');
-        return;
-      }
-
-      const sttData = await sttResponse.json();
-      const transcription = sttData.transcription;
+  startBrowserSTT(
+    async (transcription) => {
+      setIsRecording(false);
 
       if (!transcription) {
-        console.error('No transcription received');
+        console.error("No transcription received");
         return;
       }
 
-      // Send transcription to evaluator
       const currentQuestion = questions[currentQuestionIdx];
       if (!currentQuestion) {
-        console.error('No current question');
+        console.error("No current question");
         return;
       }
 
-      const evalResponse = await fetch('/api/response-evaluator', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          response: transcription,
-          question: currentQuestion,
-        }),
-      });
+      try {
+        const evalResponse = await fetch("/api/response-evaluator", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            response: transcription,
+            question: currentQuestion,
+          }),
+        });
 
-      if (evalResponse.ok) {
-        const evalData = await evalResponse.json();
-        console.log('Evaluation result:', evalData);
-      } else {
-        console.error('Evaluator API failed');
+        if (evalResponse.ok) {
+          const evalData = await evalResponse.json();
+          console.log("Evaluation result:", evalData);
+        } else {
+          console.error("Evaluator API failed");
+        }
+      } catch (e) {
+        console.error("Evaluation error:", e);
       }
-    } catch (error) {
-      console.error('Error processing audio:', error);
+    },
+    () => {
+      // Error fallback
+      setIsRecording(false);
+      alert("Speech recognition failed. Try again.");
     }
-  };
+  );
+};
+
 
   const endInterview = () => {
     const ok = confirm("End interview and save recordings?");

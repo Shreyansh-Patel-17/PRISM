@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
-import { authOptions } from "@/lib/auth"; // ⚠️ ensure this exists
+import { authOptions } from "@/lib/auth";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_AI_BACKEND_URL;
+    const backendUrl = process.env.AI_BACKEND_URL;
     if (!backendUrl) {
       return NextResponse.json(
         { error: "AI backend URL not configured" },
