@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+    console.log("AI_BACKEND_URL =", backendUrl);
 
     await connectToDatabase();
     const user = await User.findOne({ email });
