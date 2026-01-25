@@ -44,7 +44,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { skills } = await backendRes.json();
+    const data = await backendRes.json();
+
+    if (!Array.isArray(data.skills)) {
+      return NextResponse.json(
+        { error: "Invalid skills returned from parser" },
+        { status: 500 }
+      );
+    }
+
+    const skills = data.skills;
 
     // 4️⃣ Save skills to MongoDB
     await connectToDatabase();
@@ -60,7 +69,7 @@ export async function POST(req: NextRequest) {
     // 5️⃣ Success
     return NextResponse.json({
       message: "Resume parsed and skills saved",
-      skills,
+      skills: data.skills,
     });
   } catch (error) {
     console.error("Upload resume error:", error);
