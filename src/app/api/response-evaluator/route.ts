@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
 import { authOptions } from "@/lib/auth";
+
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -10,6 +11,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = await request.json();
     const { response, question } = body;
 
+    // Validation
     if (!response || !question) {
       return NextResponse.json(
         { error: "Response and question are required" },
@@ -18,7 +20,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     if (
-      !question ||
       typeof question !== "object" ||
       typeof question.text !== "string" ||
       !Array.isArray(question.keywords)
@@ -62,26 +63,30 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
 
     if (!backendRes.ok) {
-      const err = await backendRes.text();
+      const errorDetails = await backendRes.text();
       return NextResponse.json(
-        { error: "AI evaluator failed", details: err },
+        {
+          error: "AI evaluator failed",
+          status: backendRes.status,
+          details: errorDetails,
+        },
         { status: 500 }
       );
     }
 
     const result = await backendRes.json();
 
-    // ---- Non-fatal skill score update ----
+    // Non-fatal skill score update
     try {
       const session = await getServerSession(authOptions);
       const email = session?.user?.email;
+      const skill = question.skill as string | undefined;
 
-      if (email && question.skill) {
+      if (email && skill && typeof skill === "string") {
         await connectToDatabase();
         const user = await User.findOne({ email });
 
         if (user) {
-          const skill = question.skill as string;
           const finalScore =
             result?.scores?.final ??
             result?.scores?.keyword ??
@@ -92,13 +97,12 @@ export async function POST(request: NextRequest): Promise<Response> {
             new Map<string, number>();
 
           const existing = skillScores.get(skill) ?? 0;
-
           const updated =
             existing === 0
               ? finalScore
               : existing * 0.7 + finalScore * 0.3;
 
-          skillScores.set(skill, updated);
+          skillScores.set(skill, Math.min(100, Math.max(0, updated)));
           user.skillScores = skillScores as any;
           await user.save();
         }
