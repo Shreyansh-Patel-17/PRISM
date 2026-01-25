@@ -33,11 +33,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Return cached questions
-    if (user.generatedQuestions && Object.keys(user.generatedQuestions || {}).length > 0) {
-      return NextResponse.json({
-        alreadyGenerated: true,
-        questions: Object.fromEntries(user.generatedQuestions as any),
-      });
+    if (user.generatedQuestions && user.generatedQuestions.size > 0) {
+      return NextResponse.json({ alreadyGenerated: true });
     }
 
     const skills = (user.skill || []);//.slice(0, 10);
@@ -51,7 +48,6 @@ export async function POST(req: NextRequest) {
     const backendRes = await fetch(`${backendUrl}/generate-questions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify({ skills }),
     });
 
@@ -65,25 +61,29 @@ export async function POST(req: NextRequest) {
 
     const questions = await backendRes.json();
 
-    const grouped: Record<string, { text: string; keywords: string[] }[]> = {};
+    const grouped = new Map<string, { text: string; keywords: string[] }[]>();
 
     questions.forEach((q: any) => {
       if (!q.skill || !q.text) return;
-      if (!grouped[q.skill]) grouped[q.skill] = [];
-      grouped[q.skill].push({
+        
+      if (!grouped.has(q.skill)) {
+        grouped.set(q.skill, []);
+      }
+    
+      grouped.get(q.skill)!.push({
         text: q.text,
-        keywords: q.keywords || [],
+        keywords: Array.isArray(q.keywords) ? q.keywords : [],
       });
     });
 
-    if (!Object.keys(grouped).length) {
+    if (grouped.size === 0) {
       return NextResponse.json(
         { error: "No valid questions returned" },
         { status: 500 }
       );
     }
 
-    user.generatedQuestions = grouped as any;
+    user.generatedQuestions = grouped;
     await user.save();
 
     return NextResponse.json({

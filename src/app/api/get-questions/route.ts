@@ -31,7 +31,10 @@ export async function GET(request: NextRequest) {
     const rawGenerated = user.generatedQuestions;
 
     // 3. If nothing stored yet, return empty list
-    if (!rawGenerated) return NextResponse.json([] as QuestionDTO[]);
+    if (!rawGenerated || 
+       (rawGenerated instanceof Map && rawGenerated.size === 0)) {
+      return NextResponse.json([] as QuestionDTO[]);
+    }
 
     const questions: QuestionDTO[] = [];
 
