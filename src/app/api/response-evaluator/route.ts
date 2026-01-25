@@ -17,7 +17,12 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    if (!question.text || !Array.isArray(question.keywords)) {
+    if (
+      !question ||
+      typeof question !== "object" ||
+      typeof question.text !== "string" ||
+      !Array.isArray(question.keywords)
+    ) {
       return NextResponse.json(
         { error: "Invalid question format" },
         { status: 400 }
