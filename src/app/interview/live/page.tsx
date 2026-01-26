@@ -14,7 +14,7 @@ declare global {
 let recognition: any = null;
 
 function startBrowserSTT(
-  onResult: (text: string) => void,
+  transcriptRef: React.MutableRefObject<string>,
   onError: (err: any) => void
 ) {
   const SpeechRecognition =
@@ -27,12 +27,15 @@ function startBrowserSTT(
 
   recognition = new SpeechRecognition();
   recognition.lang = "en-US";
-  recognition.interimResults = false;
-  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.continuous = true;
 
   recognition.onresult = (event: any) => {
-    const transcript = event.results[0][0].transcript;
-    onResult(transcript);
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        transcriptRef.current += event.results[i][0].transcript + " ";
+      }
+    }
   };
 
   recognition.onerror = (e: any) => {
@@ -119,6 +122,9 @@ const speakTextAsync = (
 
 export default function LiveInterviewStyled() {
   const evaluationInProgressRef = useRef(false);
+  const transcriptRef = useRef("");
+  const recordingTimeoutRef = useRef<number | null>(null);
+  const MAX_RECORDING_SECONDS = 30; // ⏱️ adjust anytime
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [micOn, setMicOn] = useState(false);
@@ -195,6 +201,10 @@ export default function LiveInterviewStyled() {
         cancelAnimationFrame(animationFrameRef.current);
       }
       stopMedia();
+  
+      if (recordingTimeoutRef.current) {
+        clearTimeout(recordingTimeoutRef.current);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -243,22 +253,6 @@ export default function LiveInterviewStyled() {
     animationFrameRef.current = requestAnimationFrame(animate);
   };
 
-  // recording timer (visual only)
-  useEffect(() => {
-    if (isRecording) {
-      timerRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      setSeconds(0);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isRecording]);
-
   // toggle camera
   const toggleCamera = async () => {
     if (!streamRef.current) {
@@ -271,6 +265,85 @@ export default function LiveInterviewStyled() {
     setCamOn(t.enabled);
   };
 
+  const stopRecordingAndEvaluate = () => {
+    stopBrowserSTT();
+    setIsRecording(false);
+
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+
+    const finalText = transcriptRef.current.trim();
+    transcriptRef.current = "";
+
+    if (!finalText) {
+      console.warn("Empty transcript, skipping evaluation");
+      return;
+    }
+
+    evaluateTranscript(finalText);
+  };
+
+  const evaluateTranscript = async (transcription: string) => {
+    if (evaluationInProgressRef.current) return;
+    evaluationInProgressRef.current = true;
+
+    const currentQuestion = questions[currentQuestionIdx];
+    if (!currentQuestion) return;
+
+    try {
+      const evalResponse = await fetch("/api/response-evaluator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          response: transcription,
+          question: currentQuestion,
+        }),
+      });
+
+      if (evalResponse.ok) {
+        const evalData = await evalResponse.json();
+        console.log("Evaluation result:", evalData);
+      }
+    } catch (e) {
+      console.error("Evaluation error:", e);
+    } finally {
+      evaluationInProgressRef.current = false;
+    }
+  };
+  
+  // recording timer (visual only)
+  useEffect(() => {
+    if (!isRecording) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+  
+    timerRef.current = window.setInterval(() => {
+      setSeconds((prev) => {
+        if (prev <= 1) {
+          // ⏱️ countdown finished → auto stop
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          stopRecordingAndEvaluate();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isRecording]);
+  
   // toggle mic
   const toggleMic = async () => {
     if (!streamRef.current) {
@@ -281,6 +354,9 @@ export default function LiveInterviewStyled() {
     if (!t) return;
     t.enabled = !t.enabled;
     setMicOn(t.enabled);
+      if (!t.enabled && isRecording) {
+      stopRecordingAndEvaluate();
+    }
   };
 
   // start/stop recording
@@ -294,72 +370,30 @@ export default function LiveInterviewStyled() {
 
   if (isRecording) {
     // STOP recording
-    stopBrowserSTT();
-    setIsRecording(false);
+    stopRecordingAndEvaluate();
     return;
   }
 
   // START recording
   evaluationInProgressRef.current = false;
   window.speechSynthesis.cancel();
+  setSeconds(MAX_RECORDING_SECONDS);
   setIsRecording(true);
 
+  transcriptRef.current = "";
+
   startBrowserSTT(
-    async (transcription) => {
-      setIsRecording(false);
-
-      if (!transcription) {
-        console.error("No transcription received");
-        return;
-      }
-
-      const currentQuestion = questions[currentQuestionIdx];
-      if (!currentQuestion) {
-        console.error("No current question");
-        return;
-      }
-
-      try {
-        // 🔒 Prevent duplicate evaluator calls
-        if (evaluationInProgressRef.current) {
-          console.warn("Evaluation already in progress — skipping duplicate call");
-          return;
-        }
-        
-        evaluationInProgressRef.current = true;
-        
-        try {
-          const evalResponse = await fetch("/api/response-evaluator", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              response: transcription,
-              question: currentQuestion,
-            }),
-          });
-        
-          if (evalResponse.ok) {
-            const evalData = await evalResponse.json();
-            console.log("Evaluation result:", evalData);
-          } else {
-            console.error("Evaluator API failed");
-          }
-        } catch (e) {
-          console.error("Evaluation error:", e);
-        } finally {
-          // 🔓 Always release lock
-          evaluationInProgressRef.current = false;
-        }
-      } catch (e) {
-        console.error("Evaluation error:", e);
-      }
-    },
+    transcriptRef,
     () => {
-      // Error fallback
       setIsRecording(false);
       alert("Speech recognition failed. Try again.");
     }
   );
+  
+  // ⏱️ hard stop safety
+  recordingTimeoutRef.current = window.setTimeout(() => {
+    stopRecordingAndEvaluate();
+  }, MAX_RECORDING_SECONDS * 1000);
 };
 
 
@@ -377,6 +411,8 @@ export default function LiveInterviewStyled() {
     const ss = (s % 60).toString().padStart(2, "0");
     return `${mm}:${ss}`;
   };
+  
+  const isEndingSoon = isRecording && seconds <= 10;
 
   const prismAvatar = "/images/prism-avatar.jpg";
 
@@ -625,7 +661,7 @@ export default function LiveInterviewStyled() {
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-28 w-max z-10">
                   <div className="bg-white rounded-full shadow-lg px-6 py-3 flex items-center gap-6 border border-pink-50">
                     <div className="text-xs text-gray-500">Duration</div>
-                    <div className="font-semibold text-pink-600">{formatTime(seconds)}</div>
+                    <div className={`font-semibold transition-all ${isEndingSoon? "text-red-600 animate-[pulse_0.6s_ease-in-out_infinite]": "text-pink-600"}`}>{formatTime(seconds)}</div>
                     <div className="h-6 w-px bg-gray-100" />
                     <div className="text-xs text-gray-500">Question No.</div>
                     <div className="font-semibold">{questions.length ? `${currentQuestionIdx + 1} / ${questions.length}` : ""}</div>
