@@ -67,6 +67,8 @@ def generate_questions_api(payload: dict):
 # -------------------------
 # Response evaluation
 # -------------------------
+from fastapi.concurrency import run_in_threadpool
+
 @app.post("/evaluate-response")
-def evaluate_response_api(payload: dict):
-    return evaluate(payload)
+async def evaluate_response_api(payload: dict):
+    return await run_in_threadpool(evaluate, payload)
