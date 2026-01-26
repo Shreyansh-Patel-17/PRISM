@@ -216,3 +216,9 @@ def evaluate_response(response, question_obj, kw_weight=0.8, sent_weight=0.2):
                 "keyword_detail": {},
             },
         }
+
+# Warm-up to avoid first-request latency
+if os.getenv("WARMUP", "true") == "true":
+    print("Warming up embedding model...")
+    _ = get_embedding_model().encode("warmup", convert_to_tensor=True)
+    print("Embedding model ready")

@@ -118,6 +118,7 @@ const speakTextAsync = (
 };
 
 export default function LiveInterviewStyled() {
+  const evaluationInProgressRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [micOn, setMicOn] = useState(false);
@@ -299,6 +300,7 @@ export default function LiveInterviewStyled() {
   }
 
   // START recording
+  evaluationInProgressRef.current = false;
   window.speechSynthesis.cancel();
   setIsRecording(true);
 
@@ -318,20 +320,35 @@ export default function LiveInterviewStyled() {
       }
 
       try {
-        const evalResponse = await fetch("/api/response-evaluator", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            response: transcription,
-            question: currentQuestion,
-          }),
-        });
-
-        if (evalResponse.ok) {
-          const evalData = await evalResponse.json();
-          console.log("Evaluation result:", evalData);
-        } else {
-          console.error("Evaluator API failed");
+        // 🔒 Prevent duplicate evaluator calls
+        if (evaluationInProgressRef.current) {
+          console.warn("Evaluation already in progress — skipping duplicate call");
+          return;
+        }
+        
+        evaluationInProgressRef.current = true;
+        
+        try {
+          const evalResponse = await fetch("/api/response-evaluator", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              response: transcription,
+              question: currentQuestion,
+            }),
+          });
+        
+          if (evalResponse.ok) {
+            const evalData = await evalResponse.json();
+            console.log("Evaluation result:", evalData);
+          } else {
+            console.error("Evaluator API failed");
+          }
+        } catch (e) {
+          console.error("Evaluation error:", e);
+        } finally {
+          // 🔓 Always release lock
+          evaluationInProgressRef.current = false;
         }
       } catch (e) {
         console.error("Evaluation error:", e);
